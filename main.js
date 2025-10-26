@@ -1,6 +1,7 @@
 const { program } = require("commander");
 const fs = require("fs");
 const http = require("http");
+const superagent = require("superagent");
 
 program
   .requiredOption("-h, --host <host>", "Server listen host")
@@ -36,8 +37,31 @@ const server = http.createServer(async (req, res) => {
       res.end(image);
     } catch (err) {
       if (err.code === "ENOENT") {
-        res.writeHead(404, { "Content-Type": "text/plain" });
-        res.end("Not Found: Cannot find image in cache");
+        const response = await superagent
+          .get(`https://http.cat/${code}.jpg`)
+          .responseType("buffer")
+          .ok(() => true);
+
+        if (response.status !== 200) {
+          res.writeHead(404, { "Content-Type": "text/plain" });
+          res.end("Image not found on http.cat");
+          return;
+        }
+
+        const resp = await superagent
+          .put(`http://${host}:${port}/${code}`)
+          .set("Content-Type", "image/jpeg")
+          .send(response.body)
+          .ok(() => true);
+
+        if (resp.status !== 201) {
+          res.writeHead(404, { "Content-Type": "text/plain" });
+          res.end(resp.text);
+          return;
+        }
+
+        res.writeHead(200, { "Content-Type": "image/jpeg" });
+        res.end(response.body);
       } else {
         res.writeHead(500, { "Content-Type": "text/plain" });
         res.end("Server error: " + err.message);
