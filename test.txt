@@ -1,0 +1,6 @@
+curl -i -X PUT http://localhost:3000/418 -H "Content-Type: image/jpeg" --data-binary "@image.jpg"
+
+curl http://localhost:3000/418 -o image.jpeg
+
+curl -i -X DELETE http://localhost:3000/418
+

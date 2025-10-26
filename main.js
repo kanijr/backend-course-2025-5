@@ -19,8 +19,63 @@ if (!fs.existsSync(cachePath)) {
 }
 
 const server = http.createServer(async (req, res) => {
-  res.writeHead(200, { "Content-Type": "text/plain" });
-  res.end("Server created");
+  const fullUrl = new URL(req.url, `http://${host}:${port}`);
+  const code = Number(fullUrl.pathname.replace("/", ""));
+
+  if (Number.isNaN(code)) {
+    res.writeHead(404, { "Content-Type": "text/plain" });
+    res.end("Not Found");
+  }
+
+  const filePath = `${cachePath}/${code}.jpeg`;
+  if (req.method === "GET") {
+    try {
+      const image = await fs.promises.readFile(filePath);
+
+      res.writeHead(200, { "Content-Type": "image/jpeg" });
+      res.end(image);
+    } catch (err) {
+      if (err.code === "ENOENT") {
+        res.writeHead(404, { "Content-Type": "text/plain" });
+        res.end("Not Found: Cannot find image in cache");
+      } else {
+        res.writeHead(500, { "Content-Type": "text/plain" });
+        res.end("Server error: " + err.message);
+      }
+    }
+  } else if (req.method === "PUT") {
+    try {
+      const chunks = [];
+      for await (const chunk of req) {
+        chunks.push(chunk);
+      }
+      const buffer = Buffer.concat(chunks);
+      await fs.promises.writeFile(filePath, buffer);
+
+      res.writeHead(201);
+      res.end();
+    } catch (err) {
+      res.writeHead(500, { "Content-Type": "text/plain" });
+      res.end("Server error: " + err.message);
+    }
+  } else if (req.method === "DELETE") {
+    try {
+      await fs.promises.rm(filePath);
+      res.writeHead(200);
+      res.end();
+    } catch (err) {
+      if (err.code === "ENOENT") {
+        res.writeHead(404, { "Content-Type": "text/plain" });
+        res.end("Not Found: Image does not exist");
+      } else {
+        res.writeHead(500, { "Content-Type": "text/plain" });
+        res.end("Server error: " + err.message);
+      }
+    }
+  } else {
+    res.writeHead(405, { "Content-Type": "text/plain" });
+    res.end("Method not allowed");
+  }
 });
 
 server.listen(port, host, () => {
