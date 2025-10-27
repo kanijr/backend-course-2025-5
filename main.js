@@ -2,6 +2,7 @@ const { program } = require("commander");
 const fs = require("fs");
 const http = require("http");
 const superagent = require("superagent");
+const path = require("path");
 
 program
   .requiredOption("-h, --host <host>", "Server listen host")
@@ -20,15 +21,31 @@ if (!fs.existsSync(cachePath)) {
 }
 
 const server = http.createServer(async (req, res) => {
-  const fullUrl = new URL(req.url, `http://${host}:${port}`);
-  const code = Number(fullUrl.pathname.replace("/", ""));
-
-  if (Number.isNaN(code)) {
-    res.writeHead(404, { "Content-Type": "text/plain" });
-    res.end("Not Found");
+  let fullUrl;
+  try {
+    fullUrl = new URL(req.url, `http://${host}:${port}`);
+  } catch {
+    res.writeHead(400, { "Content-Type": "text/plain" });
+    res.end("Bad Request: invalid URL");
+    return;
   }
 
-  const filePath = `${cachePath}/${code}.jpeg`;
+  if (fullUrl.pathname === "/") {
+    res.writeHead(404, { "Content-Type": "text/plain" });
+    res.end("Not Found");
+    return;
+  }
+
+  const code = Number(fullUrl.pathname.replace("/", ""));
+
+  if (Number.isNaN(code) || code < 0) {
+    res.writeHead(400, { "Content-Type": "text/plain" });
+    res.end("Bad Request: invalid code");
+    return;
+  }
+
+  const filePath = path.join(cachePath, `${code}.jpg`);
+
   if (req.method === "GET") {
     try {
       const image = await fs.promises.readFile(filePath);
@@ -55,8 +72,8 @@ const server = http.createServer(async (req, res) => {
           .ok(() => true);
 
         if (resp.status !== 201) {
-          res.writeHead(404, { "Content-Type": "text/plain" });
-          res.end(resp.text);
+          res.writeHead(500, { "Content-Type": "text/plain" });
+          res.end("Failed to cache image");
           return;
         }
 
